@@ -10,9 +10,10 @@
 #include <Wire.h>
 // #include <WiFiManager.h>
 
-#define OLED_SW 12
-#define LED_PIN 4
-#define NUM_LEDS 72
+#define OLED_SW 14
+#define LED_SW 12
+#define LED_PIN 13
+#define NUM_LEDS 37
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 
@@ -26,8 +27,17 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 const char *ssid = "Nahar_Deco"; 
 const char *password = "Nahar1407";  
 
-bool buttonState = false;
-bool lastButtonState = false;
+int currentState = 0;
+bool buttonStateLED = false;
+bool lastButtonStateLED = false;
+bool buttonStateOLED = false;
+bool lastButtonStateOLED = false;
 bool OLEDshow = false;
+bool RGBshow = false;
+bool allowFirebaseUpdate = true;
 volatile bool rgbCycleFlag = false;
 unsigned long lastAHT10data = 0;
+
+volatile bool buttonPressed = false;
+volatile unsigned long lastButtonPressTime = 0;
+const unsigned long buttonDebounceInterval = 50;
