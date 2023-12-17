@@ -13,6 +13,11 @@ void WifiConnect() {
   Serial.printf("RSSI: %d\n", WiFi.RSSI());
 }
 
+void turnOffLEDs() {
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+  FastLED.show();
+}
+
 void whiteMode() {
   Serial.println("Entering white mode");
   // Set all LEDs to white
@@ -58,20 +63,25 @@ void warmMode() {
 }
 
 void rgbCycleMode() {
-  Serial.println("Entering RGB cycle mode");
+  Serial.println("Entering RGB cycle mode"); 
   // Set the RGB cycle mode flag to true
   rgbCycleFlag = true;
+
   do {
     for (int i = 0; i < 256; ++i) {
       for (int j = 0; j < NUM_LEDS; ++j) {
-        leds[j] = CHSV((i + j * 2) % 256, 255, 255);
+        leds[j] = CHSV(i + (j*10), 255, 255);
       }
       FastLED.show();
-      delay(10);  // Adjust the delay to control the speed of color cycling
+      delay(10);
     }
+    // // Check for conditions to interrupt the loop
+if (Firebase.RTDB.getBool(&fbdo, "/")) {
+    rgbCycleFlag = false;
+    break;
+  }
+    
   } while (rgbCycleFlag);
-  // Clear the RGB cycle mode flag when the loop exits
-  rgbCycleFlag = false;
 }
 
 void showTime() {
@@ -150,6 +160,94 @@ void readAHTSensor() {
   display.display();
 }
 
+void onFirebaseStream(FirebaseStream data) {
+  Serial.println("New data received:");
+  Serial.println(data.dataPath());
+  Serial.println(data.dataType());
+  Serial.println(data.payload());
+
+  // Parse the data path to determine the mode
+  String modePath = data.dataPath();
+  String dataPath = data.dataPath();
+
+  // Parse the data payload to determine the mode state
+  bool modeState = strcmp(data.payload().c_str(), "true") == 0;
+
+  Serial.print("Mode Path: ");
+  Serial.println(modePath);
+  Serial.print("Mode State: ");
+  Serial.println(modeState);
+
+  if (modePath == "/turnOffLEDs_mode") {
+    Serial.println("In turn off condition");
+      if (modeState) {
+        Serial.println("turnOffLEDs_Mode() called");
+        turnOffLEDs();
+      }
+  } else if (modePath == "/white_mode") {
+    Serial.println("In white_mode condition");
+    if (modeState) {
+      Serial.println("whiteMode() called");
+      whiteMode();
+    } else {
+      // If white_mode is turned off, turn off LEDs
+      turnOffLEDs();
+    }
+  } else if (modePath == "/warm_mode") {
+    Serial.println("In warm_mode condition");
+    if (modeState) {
+      Serial.println("warmMode() called");
+      warmMode();
+    } else {
+      // If warm_mode is turned off, turn off LEDs
+      turnOffLEDs();
+    }
+  } else if (modePath == "/rgb_cycle_mode") {
+    Serial.println("In rgb_cycle_mode condition");
+    if (modeState) {
+      Serial.println("rgbCycleMode() called");
+      rgbCycleMode();
+    } else {
+      // If rgb_cycle_mode is turned off, turn off LEDs
+      turnOffLEDs();
+    }
+  } else if (modePath == "/amethyst_mode"){
+    Serial.println("In amethyst_mode condition");
+    if (modeState) {
+      purpleMode();
+    } else {
+      turnOffLEDs();
+    }
+  } else if (modePath == "/aquamarine_mode"){
+    Serial.println("in aquamarine_mode condition");
+    if (modeState) {
+      blueMode();
+    } else {
+      turnOffLEDs();
+    }
+  } else if (modePath == "/crimson_mode"){
+    Serial.println("in crimson_mode condition");
+    if (modeState) {
+      redMode();
+    } else {
+      turnOffLEDs();
+    }
+  } else if (modePath == "/mint_mode"){
+    Serial.println("in mint_mode condition");
+    if (modeState) {
+      mintMode();
+    } else {
+      turnOffLEDs();
+    }
+  } else if (modePath == "/sunflower_mode"){
+    Serial.println("in sunflower_mode condition");
+    if (modeState){
+      sunflowerMode();
+    } else {
+      turnOffLEDs();
+    }
+  }
+}
 void setup() {
   Serial.begin(115200);
   WifiConnect(); 
@@ -157,6 +255,7 @@ void setup() {
   Wire.begin();
   configTime(7 * 3600, 0, "pool.ntp.org");  // Set the UTC offset for Jakarta time and NTP server
   pinMode(OLED_SW, INPUT_PULLUP);
+  pinMode(LED_PIN, OUTPUT);
   // Initialize with the I2C oled
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0X3C)) {
     Serial.println(F("SSD1306 allocation failed"));
@@ -169,7 +268,7 @@ void setup() {
   }
   display.clearDisplay();
   Serial.println(" & Connecting to Firebase...");
-  Firebase_Init("Lamp/cmd");
+  Firebase_Init("LED_mode");
   Serial.println("System ready.");
 }
 void loop() {
@@ -178,22 +277,53 @@ void loop() {
     lastAHT10data = currentMillis;
     // Read sensor data
     aht.getEvent(&humidity, &temperature);
+       Serial.print("Temperature: ");
+    Serial.print(temperature.temperature, 1);
+    Serial.println(" °C");
+    Serial.print("Humidity: ");
+    Serial.print(humidity.relative_humidity, 1);
+    Serial.println("%");
     // Set the temperature and humidity values in Firebase
-    Firebase.RTDB.setFloat(&fbdo, "Lamp/sensors/temperature", temperature.temperature);
-    Firebase.RTDB.setFloat(&fbdo, "Lamp/sensors/humidity", humidity.relative_humidity);
+    Firebase.RTDB.setFloat(&fbdo, "/sensors/temperature", temperature.temperature);
+    Firebase.RTDB.setFloat(&fbdo, "/sensors/humidity", humidity.relative_humidity);
   }
-  buttonState = digitalRead(OLED_SW);
-  if (buttonState != lastButtonState) {     // Button state has changed
-    if (buttonState == LOW) {               // Button is pressed
+  buttonStateOLED = digitalRead(OLED_SW);
+  if (buttonStateOLED != lastButtonStateOLED) {     // Button state has changed
+    if (buttonStateOLED == LOW) {               // Button is pressed
       OLEDshow = !OLEDshow;
       delay(50);                           // Debounce delay
     }
-    lastButtonState = buttonState;
+    lastButtonStateOLED = buttonStateOLED;
   }
-
   if (OLEDshow) {
     readAHTSensor();
   } else {
     showTime();
+  }
+ buttonStateLED = digitalRead(LED_SW);
+
+  // Check if the button is pressed
+  if (buttonStateLED == HIGH) {
+    delay(50);  // Debounce delay
+
+    // Increment the state
+    currentState = (currentState + 1) % 2;
+
+    // Call the corresponding void function based on the current state
+    switch (currentState) {
+      case 0:
+        whiteMode();
+        break;
+      case 1:
+        turnOffLEDs();
+        break;
+    }
+    // Print the current state to the serial monitor
+    Serial.print("Current State: ");
+    Serial.println(currentState);
+    // Wait for the button to be released before allowing another state change
+    while (digitalRead(LED_SW) == HIGH) {
+      delay(50);
+    }
   }
 }
